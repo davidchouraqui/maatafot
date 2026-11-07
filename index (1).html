@@ -26,7 +26,10 @@ h1{font-size:22px;margin:0;font-weight:700;text-wrap:balance}
 .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .mic-zone{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0}
 .mic{width:88px;height:88px;border-radius:50%;border:none;background:var(--gold);color:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:box-shadow .3s}
-.mic.on{box-shadow:0 0 0 12px rgba(233,196,106,.18),0 0 0 24px rgba(233,196,106,.07)}
+.mic.armed{background:#F3D98F}
+.mic.on{background:var(--gold);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 8px rgba(233,196,106,.25),0 0 0 18px rgba(233,196,106,.08)}50%{box-shadow:0 0 0 16px rgba(233,196,106,.3),0 0 0 32px rgba(233,196,106,.1)}}
+.status{min-height:24px}
 .mic:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
 .status{font-weight:500;text-align:center}
 .interim{min-height:22px;color:var(--muted);font-style:italic;text-align:center}
@@ -60,7 +63,7 @@ details{background:var(--panel);border-radius:14px;padding:12px 16px}
 summary{cursor:pointer;font-weight:500}
 textarea{width:100%;min-height:200px;margin-top:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;padding:10px}
 .small{font-size:12px;color:var(--muted)}
-@media (prefers-reduced-motion:reduce){.mic{transition:none}}
+@media (prefers-reduced-motion:reduce){.mic{transition:none}.mic.on{animation:none;box-shadow:0 0 0 12px rgba(233,196,106,.3)}}
 </style>
 
 <div class="wrap">
@@ -302,16 +305,32 @@ let rec=null,listening=false;
 function warn(msg){$("warn").textContent=msg;$("warn").hidden=false}
 if(!SR){warn("הדפדפן הזה לא תומך בזיהוי דיבור. נסו בכרום באנדרואיד או בספארי באייפון. בינתיים אפשר לבדוק בהקלדה.")}
 else{
-  rec=new SR();rec.lang="he-IL";rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
-  rec.onresult=ev=>{let interim="";for(let i=ev.resultIndex;i<ev.results.length;i++){const r=ev.results[i];if(r.isFinal){handle(r[0].transcript)}else interim+=r[0].transcript}$("interim").textContent=interim};
+  // One phrase per session is far more reliable on Android Chrome than continuous mode; we restart after each phrase.
+  rec=new SR();rec.lang="he-IL";rec.continuous=false;rec.interimResults=true;rec.maxAlternatives=1;
+  rec.onstart=()=>{active=true;$("mic").classList.add("on");status("מקשיב… דברו עכשיו");try{navigator.vibrate&&navigator.vibrate(30)}catch(e){}};
+  rec.onspeechstart=()=>status("שומע…");
+  rec.onresult=ev=>{let interim="";for(let i=ev.resultIndex;i<ev.results.length;i++){const r=ev.results[i];if(r.isFinal){$("interim").textContent="נקלט: «"+r[0].transcript+"»";handle(r[0].transcript)}else interim+=r[0].transcript}if(interim)$("interim").textContent=interim};
   rec.onerror=ev=>{
-    if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){listening=false;setMic();warn("אין גישה למיקרופון כאן. פתחו את הקובץ בכרום בטלפון מכתובת https (למשל GitHub Pages) ואשרו מיקרופון. בינתיים אפשר לבדוק בהקלדה.")}
-    else if(ev.error==="network"){warn("זיהוי הדיבור של הדפדפן צריך אינטרנט.")}
+    const e=ev.error;
+    if(e==="not-allowed"||e==="service-not-allowed"){listening=false;setMic();warn("אין אישור למיקרופון. בכרום: ⋮ ← הגדרות ← הגדרות אתר ← מיקרופון, ואפשרו לאתר הזה. אם פתחתם מתוך אפליקציה אחרת, פתחו את הקישור בכרום עצמו.")}
+    else if(e==="no-speech"){status("לא נשמע קול. דברו קרוב יותר לטלפון")}
+    else if(e==="audio-capture"){listening=false;setMic();warn("לא נמצא מיקרופון פעיל. ייתכן שאפליקציה אחרת משתמשת בו.")}
+    else if(e==="network"){listening=false;setMic();warn("זיהוי הדיבור של כרום צריך חיבור לאינטרנט.")}
+    else if(e==="language-not-supported"){listening=false;setMic();warn("הדפדפן לא תומך בזיהוי עברית. נסו בכרום המעודכן.")}
+    else if(e!=="aborted"){warn("שגיאת זיהוי: "+e)}
   };
-  rec.onend=()=>{if(listening){try{rec.start()}catch(e){}}};
+  rec.onend=()=>{active=false;$("mic").classList.remove("on");if(listening){setTimeout(()=>{if(listening&&!active){try{rec.start()}catch(e){}}},250)}else setMic()};
 }
-function setMic(){$("mic").classList.toggle("on",listening);$("mic").setAttribute("aria-label",listening?"עצור האזנה":"התחל האזנה");$("status").textContent=listening?"מקשיב… הקריאו את המעטפה הבאה":"לחצו והקריאו: שם, סכום, אמצעי תשלום";if(!listening)$("interim").textContent=""}
-$("mic").onclick=()=>{if(!rec){warn("זיהוי דיבור לא זמין בדפדפן הזה. אפשר לבדוק בהקלדה.");return}listening=!listening;if(listening){try{rec.start()}catch(e){}}else{try{rec.stop()}catch(e){}}setMic()};
+let active=false;
+function status(t){$("status").textContent=t}
+function setMic(){$("mic").setAttribute("aria-label",listening?"עצור האזנה":"התחל האזנה");$("mic").classList.toggle("armed",listening);if(!listening){$("mic").classList.remove("on");status("לחצו והקריאו: שם, סכום, אמצעי תשלום")}}
+$("mic").onclick=()=>{
+  if(!rec){warn("זיהוי דיבור לא זמין בדפדפן הזה. פתחו בכרום. בינתיים אפשר לבדוק בהקלדה.");return}
+  $("warn").hidden=true;
+  listening=!listening;setMic();
+  if(listening){status("מתחבר למיקרופון…");try{rec.start()}catch(e){warn("לא הצלחנו להפעיל את המיקרופון: "+e.message)}}
+  else{try{rec.abort()}catch(e){}}
+};
 
 // ---------- first view: examples so the screen shows what it does ----------
 if(!entries.length&&!stored){
