@@ -129,7 +129,7 @@ body{padding-top:max(16px,env(safe-area-inset-top,0px))}
     <button class="mic" id="mic" aria-label="התחל האזנה">
       <svg aria-hidden="true" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
     </button>
-    <div class="status" id="status">לחצו והקריאו: שם, סכום, אמצעי תשלום</div>
+    <div class="status" id="status">לחצו והקריאו: שם וסכום</div>
     <div class="interim" id="interim"></div>
     <div class="hint">למשל: «משפחת לוי, זוג עם שני ילדים, אלף שמונה מאות, צ׳ק»</div>
     <div class="hint">פקודות: «תיקון 600» · «מחק» · «בלי שם, 360 מזומן»</div>
@@ -349,8 +349,9 @@ function closeSheet(save){
   }
   $("sheet").hidden=true;sheetEntry=null;
   if(save)render(e);
-  if(resumeAfterSheet&&rec){listening=true;setMic();status("מתחבר למיקרופון…");try{rec.start()}catch(_){}}
+  // the mic stays off after each envelope; the next one starts with a tap
   resumeAfterSheet=false;
+  if(save)status("נשמר. לחצו על המיקרופון למעטפה הבאה");
 }
 function render(newEntry){
   if(newEntry)entries.unshift(newEntry);
@@ -461,7 +462,7 @@ else{
 }
 let active=false,lastInterim="",gotFinal=false;
 function status(t){$("status").textContent=t}
-function setMic(){$("mic").setAttribute("aria-label",listening?"עצור האזנה":"התחל האזנה");$("mic").classList.toggle("armed",listening);if(!listening){$("mic").classList.remove("on");status("לחצו והקריאו: שם, סכום, אמצעי תשלום")}}
+function setMic(){$("mic").setAttribute("aria-label",listening?"עצור האזנה":"התחל האזנה");$("mic").classList.toggle("armed",listening);if(!listening){$("mic").classList.remove("on");status("לחצו והקריאו: שם וסכום")}}
 $("mic").onclick=()=>{
   if(!rec){warn("זיהוי דיבור לא זמין בדפדפן הזה. פתחו בכרום. בינתיים אפשר לבדוק בהקלדה.");return}
   $("warn").hidden=true;
